@@ -6,25 +6,47 @@ from transformers import BartTokenizer, BartForConditionalGeneration, Trainer, T
 
 dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split="train[:5%]")
 
+def realistic_typo(word):
+    if len(word) < 3:
+        return word
+
+    import random
+
+    ops = ["delete", "swap", "replace", "insert"]
+    op = random.choice(ops)
+
+    i = random.randint(0, len(word) - 2)
+
+    if op == "delete":
+        return word[:i] + word[i+1:]
+
+    elif op == "swap":
+        return word[:i] + word[i+1] + word[i] + word[i+2:]
+
+    elif op == "replace":
+        return word[:i] + random.choice("abcdefghijklmnopqrstuvwxyz") + word[i+1:]
+
+    elif op == "insert":
+        return word[:i] + random.choice("abcdefghijklmnopqrstuvwxyz") + word[i:]
+
+    return word
+
 def corrupt_text(text):
     words = text.split()
-    if len(words) < 2:
+
+    if len(words) == 0:
         return text
 
     i = random.randint(0, len(words)-1)
-    word = words[i]
+    words[i] = realistic_typo(words[i])
 
-    if len(word) > 3:
-        pos = random.randint(0, len(word)-1)
-        word = word[:pos] + word[pos+1:]
-
-    words[i] = word
     return " ".join(words)
 
 
 def preprocess(example):
+    corrupted = corrupt_text(example["text"])
     return {
-        "input": corrupt_text(example["text"]),
+        "input": f"fix spelling: {corrupted}",
         "target": example["text"]
     }
 dataset = dataset.map(preprocess)

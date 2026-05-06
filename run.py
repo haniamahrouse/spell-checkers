@@ -2,43 +2,50 @@ import random
 import numpy as np
 from datasets import load_dataset
 from bart_spell_checker import BartSpellChecker
+from nltk.corpus import words
 
+word_set = set(words.words())
 # ✅ FIRST define helper functions
+
+
+def realistic_typo(word):
+    if len(word) < 3:
+        return word
+
+    ops = ["delete", "swap", "replace", "insert"]
+    op = random.choice(ops)
+
+    i = random.randint(0, len(word) - 2)
+
+    if op == "delete":
+        return word[:i] + word[i+1:]
+
+    elif op == "swap":
+        return word[:i] + word[i+1] + word[i] + word[i+2:]
+
+    elif op == "replace":
+        return word[:i] + random.choice("abcdefghijklmnopqrstuvwxyz") + word[i+1:]
+
+    elif op == "insert":
+        return word[:i] + random.choice("abcdefghijklmnopqrstuvwxyz") + word[i:]
+
+    return word
 
 def corrupt_text(text):
     words = text.split()
-    new_words = []
 
-    for word in words:
-        # 40% chance to corrupt EACH word
-        if random.random() < 0.4 and len(word) > 3:
+    if len(words) == 0:
+        return text
 
-            op = random.choice(["delete", "swap", "replace"])
+    i = random.randint(0, len(words)-1)
+    words[i] = realistic_typo(words[i])
 
-            if op == "delete":
-                i = random.randint(0, len(word)-1)
-                word = word[:i] + word[i+1:]
-
-            elif op == "swap" and len(word) > 4:
-                i = random.randint(0, len(word)-2)
-                word = word[:i] + word[i+1] + word[i] + word[i+2:]
-
-            elif op == "replace":
-                i = random.randint(0, len(word)-1)
-                word = (
-                    word[:i]
-                    + random.choice("abcdefghijklmnopqrstuvwxyz")
-                    + word[i+1:]
-                )
-
-        new_words.append(word)
-
-    return " ".join(new_words)
-
+    return " ".join(words)
 
 def preprocess(example):
+    corrupted = corrupt_text(example["text"])
     return {
-        "input": corrupt_text(example["text"]),
+        "input": f"fix spelling: {corrupted}",
         "target": example["text"]
     }
 
@@ -48,7 +55,8 @@ def compute_word_accuracy(model, dataset):
     correct_words = 0
 
     for example in dataset:
-        prediction = model.correct_sentence(example["input"])
+        raw_input = example["input"].replace("fix spelling: ", "")
+        prediction = model.correct_sentence(raw_input)
 
         pred_words = prediction.split()
         target_words = example["target"].split()
@@ -61,7 +69,11 @@ def compute_word_accuracy(model, dataset):
     return correct_words / total_words if total_words > 0 else 0
 
 
-# ✅ THEN run everything
+def postprocess(predicted_word):
+    if predicted_word in word_set:
+        return predicted_word
+    return predicted_word
+
 
 model = BartSpellChecker()
 

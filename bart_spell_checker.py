@@ -6,12 +6,14 @@ class BartSpellChecker:
         self.model = BartForConditionalGeneration.from_pretrained("./bart_model")
 
     def correct_sentence(self, text):
+        input_text = f"fix spelling: {text}"
+
         inputs = self.tokenizer(
-            text,
+            input_text,
             return_tensors="pt",
             truncation=True,
             padding=True
-        )
+    )
 
         outputs = self.model.generate(
             inputs["input_ids"],
